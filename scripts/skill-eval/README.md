@@ -26,4 +26,10 @@ node scripts/skill-eval/run.mjs --label after --cli . --reps 5
 node scripts/skill-eval/compare.mjs scripts/skill-eval/results before after
 ```
 
+For planning quality, `judge.mjs` shows a judge model each rep's two plans as "Plan 1" and "Plan 2" in random order and asks which better serves the request:
+
+```bash
+node scripts/skill-eval/judge.mjs scripts/skill-eval/results before after --scenario propose
+```
+
 `--model` picks the agent model, `--only a,b` runs some scenarios, and `--grader` sets the checkout whose CLI grades results (default: this one). Each run writes `<scenario>-<rep>.json` (checks, tokens, cost, turns, time) and the full `stream.jsonl` transcript.

@@ -178,6 +178,11 @@ function runOne(scenario, rep) {
   const base = path.join(outDir, `${scenario.id}-${rep}`);
   fs.writeFileSync(`${base}.json`, JSON.stringify(record, null, 2));
   fs.writeFileSync(`${base}.stream.jsonl`, agent.stdout ?? '');
+  // Keep what the agent planned, for judge.mjs.
+  const changes = path.join(root, 'openspec', 'changes');
+  if (fs.existsSync(changes)) {
+    fs.cpSync(changes, `${base}.changes`, { recursive: true });
+  }
   fs.rmSync(work, { recursive: true, force: true });
   return record;
 }

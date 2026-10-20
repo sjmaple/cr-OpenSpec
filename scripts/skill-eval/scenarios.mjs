@@ -10,6 +10,10 @@ import { applyClearCompleted } from './seeds/add-clear-completed/implementation.
 // finish on their own say so, the way a user stepping away would.
 const AUTONOMOUS = ' Use your best judgment instead of asking me questions.';
 
+// How an agent says "these tasks are not done", in any of its phrasings.
+export const UNFINISHED_TASKS =
+  /incomplete|unfinished|unchecked|not (yet )?(complete|completed|done|implemented)|0\s*(\/|of)\s*3|3 (open|remaining|pending)/i;
+
 const SEEDS = path.join(path.dirname(new URL(import.meta.url).pathname), 'seeds');
 
 function seedChange(root, name) {
@@ -177,7 +181,7 @@ export const SCENARIOS = [
     checks: (ctx) => [
       { name: 'change is not archived', pass: ctx.exists('openspec/changes/add-priority/proposal.md') },
       { name: 'main spec unchanged', pass: !/Todo priority/.test(ctx.read('openspec/specs/todo-list/spec.md') ?? '') },
-      { name: 'warns about the incomplete tasks', pass: /incomplete|unfinished|not (yet )?(complete|done)|0\/3|3 (open|remaining)/i.test(ctx.result) },
+      { name: 'warns about the incomplete tasks', pass: UNFINISHED_TASKS.test(ctx.result) },
     ],
   },
   {
