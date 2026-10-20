@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import { PROJECT_ROOT_GUARD } from '../../../src/core/templates/workflows/project-root.js';
 import { STORE_SELECTION_GUIDANCE } from '../../../src/core/templates/workflows/store-selection.js';
+import {
+  BEFORE_YOU_START,
+  PROJECT_CHECK_REFERENCE,
+  STORES_REFERENCE,
+} from '../../../src/core/templates/workflows/references.js';
 import { getFeedbackSkillTemplate } from '../../../src/core/templates/skill-templates.js';
 import {
   generateSkillContent,
@@ -42,10 +47,14 @@ describe('project root guard', () => {
     ];
   }
 
+  // The guard ships as each skill's references/project-check.md; SKILL.md
+  // says when to read it, before any step runs.
   it('warns about an uninitialized project in every deployed skill', () => {
     for (const { template, dirName } of getSkillTemplates()) {
       const content = generateSkillContent(template, 'PARITY-BASELINE');
-      expect(content, dirName).toContain(PROJECT_ROOT_GUARD);
+      expect(content, dirName).toContain(BEFORE_YOU_START);
+      const reference = template.references?.find(({ path }) => path === PROJECT_CHECK_REFERENCE.path);
+      expect(reference?.content, dirName).toContain(PROJECT_ROOT_GUARD);
     }
   });
 
@@ -153,7 +162,7 @@ describe('project root guard', () => {
     ];
 
     for (const [label, body] of renderedBodies()) {
-      const guardStart = body.indexOf(PROJECT_ROOT_GUARD);
+      const guardStart = body.indexOf(BEFORE_YOU_START);
       expect(guardStart, label).toBeGreaterThanOrEqual(0);
 
       // A skill's YAML frontmatter is metadata a host reads to pick the skill,
@@ -169,16 +178,21 @@ describe('project root guard', () => {
     }
   });
 
-  // The guard is worthless if it sits at the end of a long workflow, so pin
-  // where it lives: directly under the store-selection guidance, in the
-  // header every workflow reads before it starts.
-  it('sits directly under the store-selection guidance', () => {
-    for (const [label, body] of renderedBodies()) {
-      const storeStart = body.indexOf(STORE_SELECTION_GUIDANCE);
-      expect(storeStart, label).toBeGreaterThanOrEqual(0);
-      expect(body.indexOf(PROJECT_ROOT_GUARD), label).toBe(
-        storeStart + STORE_SELECTION_GUIDANCE.length + '\n\n'.length
-      );
+  // The pointer is only as good as what it points at: it must name both
+  // references, run the same root check the guard describes, and every skill
+  // must ship both files beside SKILL.md.
+  it('points at a store and project-check reference every skill ships', () => {
+    expect(BEFORE_YOU_START).toContain(`\`${STORES_REFERENCE.path}\``);
+    expect(BEFORE_YOU_START).toContain(`\`${PROJECT_CHECK_REFERENCE.path}\``);
+    expect(BEFORE_YOU_START).toContain('run `openspec list --json`');
+    expect(BEFORE_YOU_START).toContain('`"root": null`');
+    expect(BEFORE_YOU_START).toContain('starts with `Declared in` or `Invalid store declaration in`');
+    expect(STORES_REFERENCE.content).toContain(STORE_SELECTION_GUIDANCE);
+
+    for (const { template, dirName } of getSkillTemplates()) {
+      const paths = (template.references ?? []).map(({ path }) => path);
+      expect(paths, dirName).toContain(STORES_REFERENCE.path);
+      expect(paths, dirName).toContain(PROJECT_CHECK_REFERENCE.path);
     }
   });
 

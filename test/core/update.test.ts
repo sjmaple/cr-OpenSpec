@@ -876,9 +876,10 @@ metadata:
       // The codex marker is written (writeSharedSkillTarget on the non-owned path).
       expect(await fs.readFile(path.join(skillsDir, '.openspec-target'), 'utf-8')).toBe('codex\n');
       // A single opsx-explore prompt infers only the `explore` workflow, and the
-      // generated skill carries Codex `$openspec-` syntax.
+      // generated skill carries Codex `$openspec-` syntax (its examples
+      // reference shows an explore invocation).
       const explore = await fs.readFile(
-        path.join(skillsDir, 'openspec-explore', 'SKILL.md'),
+        path.join(skillsDir, 'openspec-explore', 'references', 'examples.md'),
         'utf-8'
       );
       expect(explore).toContain('$openspec-');

@@ -54,7 +54,8 @@ import {
   getToolStates,
   getSkillTemplates,
   getCommandContents,
-  generateSkillContent,
+  generateSkillFiles,
+  writeSkillFiles,
   hasGlobalSkillTarget,
   resolveToolSkillsDir,
   toolSupportsSkills,
@@ -992,20 +993,19 @@ export class InitCommand {
           // Create skill directories and SKILL.md files
           for (const { template, dirName } of skillTemplates) {
             const skillDir = path.join(tool.skillsPath, dirName);
-            const skillFile = path.join(skillDir, 'SKILL.md');
 
-            // Generate SKILL.md content with YAML frontmatter including generatedBy
+            // Generate SKILL.md (frontmatter includes generatedBy) and its references
             const transformer = getTransformerForTool(
               tool.value,
               delivery,
               resolveCommandSurfaceCapability(tool.value),
               resolveCommandInvocation(tool.value)
             );
-            const skillContent = generateSkillContent(template, OPENSPEC_VERSION, transformer);
-
-            // Write the skill file
-            FileSystemUtils.assertPathWithin(tool.skillsRoot, skillFile);
-            await FileSystemUtils.writeFile(skillFile, skillContent);
+            await writeSkillFiles(
+              tool.skillsRoot,
+              skillDir,
+              generateSkillFiles(template, OPENSPEC_VERSION, transformer)
+            );
           }
           writeSharedSkillTarget(projectPath, tool.value);
         }

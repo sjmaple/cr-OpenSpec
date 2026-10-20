@@ -14,12 +14,14 @@ import {
 import { AI_TOOLS } from '../../../src/core/config.js';
 import {
   generateSkillContent,
+  generateSkillFiles,
   getCommandContents,
   getCommandTemplates,
   getSkillTemplates,
 } from '../../../src/core/shared/skill-generation.js';
 import { generateCommands } from '../../../src/core/command-generation/generator.js';
 import { getProfileWorkflows } from '../../../src/core/profiles.js';
+import { skillSource } from '../../helpers/skill-text.js';
 
 // Bodies as generated with every workflow installed. Profile-dependent
 // handoffs are covered separately below.
@@ -29,18 +31,31 @@ const command = getCommandTemplates().find(e => e.id === 'explore')!.template;
 // Both delivery surfaces must carry the same contract; every behavioral
 // assertion below runs against each body.
 const bodies: Array<[string, string]> = [
-  ['skill', skill.instructions],
+  ['skill', skillSource(skill)],
   ['command', command.content],
 ];
 
+const CAPTURE_START = 'If the user asks you to capture the exploration as a new change';
+const CAPTURE_END = 'Capturing artifacts never starts implementing them.';
+
+/**
+ * The new-change branch: SKILL.md's "When no change exists" section, which
+ * hands a capture to `references/capture.md`, followed by that reference.
+ */
 function newChangeTransition(body: string, label: string): string {
   const start = body.indexOf('### When no change exists');
   const end = body.indexOf('### When a change exists');
 
   expect(start, label).toBeGreaterThanOrEqual(0);
   expect(end, label).toBeGreaterThan(start);
+  expect(body.slice(start, end), label).toContain('follow `references/capture.md`');
 
-  return body.slice(start, end);
+  const captureStart = body.indexOf(CAPTURE_START);
+  const captureEnd = body.indexOf(CAPTURE_END, captureStart);
+  expect(captureStart, `${label}: capture reference missing`).toBeGreaterThanOrEqual(0);
+  expect(captureEnd, `${label}: capture reference unterminated`).toBeGreaterThan(captureStart);
+
+  return `${body.slice(start, end)}\n\n${body.slice(captureStart, captureEnd + CAPTURE_END.length)}`;
 }
 
 function occurrenceCount(body: string, value: string): number {
@@ -238,7 +253,7 @@ describe('explore templates', () => {
       // The guardrail points at the capture transition rather than restating
       // the contract a third time, so the three sites cannot drift apart.
       expect(body, label).toContain(
-        "the user's own capture request is the exception, handled in the capture transition above"
+        "the user's own capture request is the exception, handled in the capture transition (`references/capture.md`)"
       );
     }
   });
@@ -778,7 +793,7 @@ describe('explore handoffs follow the installed workflow set (#869)', () => {
   function exploreSkillBody(workflows: string[]): string {
     const entry = getSkillTemplates(workflows).find(e => e.workflowId === 'explore');
     expect(entry).toBeDefined();
-    return entry!.template.instructions;
+    return skillSource(entry!.template);
   }
 
   function exploreCommandBody(workflows: string[]): string {
@@ -790,11 +805,14 @@ describe('explore handoffs follow the installed workflow set (#869)', () => {
   it.each(PROFILES)('%s: generated skills never name a missing workflow', (_name, workflows, missing) => {
     const body = exploreSkillBody(workflows);
     for (const tool of AI_TOOLS) {
-      const content = generateSkillContent(
+      // SKILL.md and every reference the skill ships.
+      const content = generateSkillFiles(
         getSkillTemplates(workflows).find(e => e.workflowId === 'explore')!.template,
         'TEST',
         getSkillReferenceTransformer(tool.value)
-      );
+      )
+        .map(file => file.content)
+        .join('\n');
       for (const id of missing) {
         const skillName = id === 'propose' ? 'openspec-propose' : 'openspec-apply-change';
         expect(content, `${tool.value} ${id}`).not.toContain(skillName);

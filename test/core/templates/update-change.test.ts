@@ -8,6 +8,13 @@ import { STORE_SELECTION_GUIDANCE } from '../../../src/core/templates/workflows/
 import { PROJECT_ROOT_GUARD } from '../../../src/core/templates/workflows/project-root.js';
 import { resolveOptionalWorkflows } from '../../../src/core/templates/optional-workflow.js';
 import { ALL_WORKFLOWS, CORE_WORKFLOWS } from '../../../src/core/profiles.js';
+import {
+  BEFORE_YOU_START,
+  PROJECT_CHECK_REFERENCE,
+  STORES_REFERENCE,
+  withReferences,
+} from '../../../src/core/templates/workflows/references.js';
+import { skillSource } from '../../helpers/skill-text.js';
 
 const skill = getUpdateChangeSkillTemplate();
 const command = getOpsxUpdateCommandTemplate();
@@ -15,7 +22,7 @@ const command = getOpsxUpdateCommandTemplate();
 const render = (workflows: readonly string[]): Array<[string, string]> => {
   const installed = new Set<string>(workflows);
   return [
-    ['skill', resolveOptionalWorkflows(skill.instructions, installed)],
+    ['skill', resolveOptionalWorkflows(skillSource(skill), installed)],
     ['command', resolveOptionalWorkflows(command.content, installed)],
   ];
 };
@@ -114,6 +121,10 @@ function writeAuthorizationsOutsideStepFive(body: string, label: string): string
   let rest = body
     .split(stepFive(body, label))
     .join('\n')
+    .split(withReferences('', [STORES_REFERENCE, PROJECT_CHECK_REFERENCE]))
+    .join('')
+    .split(BEFORE_YOU_START)
+    .join('')
     .split(STORE_SELECTION_GUIDANCE)
     .join('')
     .split(PROJECT_ROOT_GUARD)
@@ -230,8 +241,12 @@ describe('update-change templates', () => {
       expect(body, label).toContain('Custom schemas must work unchanged');
       // No literal artifact filenames anywhere: no proposal.md/design.md/tasks.md
       // branching, and no worked example that names them. The only .md literal
-      // allowed is the specs/**/*.md glob illustration.
-      expect(body.replace(/specs\/\*\*\/\*\.md/g, ''), label).not.toMatch(/\b[\w-]+\.md\b/);
+      // allowed is the specs/**/*.md glob illustration, beside the skill's own
+      // references/<name>.md files.
+      expect(
+        body.replace(/specs\/\*\*\/\*\.md/g, '').replace(/references\/[\w-]+\.md/g, ''),
+        label
+      ).not.toMatch(/\b[\w-]+\.md\b/);
     }
   });
 

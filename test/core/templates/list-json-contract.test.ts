@@ -66,12 +66,15 @@ describe('workflow list --json field usage', () => {
     }
   });
 
-  it('keeps bulk archive sync available with and without the sync workflow', () => {
+  // `openspec archive` applies all of a change's deltas or none. Keeping only
+  // some of one change's deltas needs the sync workflow, which a custom
+  // profile may not install; without it the workflow asks instead.
+  it('routes a partly excluded change through sync only when sync is installed', () => {
     const variants = [
       [
         getSkillTemplates(['bulk-archive', 'sync']).find((entry) => entry.workflowId === 'bulk-archive')!.template.instructions,
         getSkillTemplates(['bulk-archive'])[0].template.instructions,
-        'openspec-sync-specs',
+        '/opsx:sync',
       ],
       [
         getCommandTemplates(['bulk-archive', 'sync']).find((entry) => entry.id === 'bulk-archive')!.template.content,
@@ -81,44 +84,33 @@ describe('workflow list --json field usage', () => {
     ] as const;
 
     for (const [withSync, withoutSync, workflow] of variants) {
-      const syncStep = (text: string) => text.slice(
-        text.indexOf('a. **Sync included delta specs**'),
-        text.indexOf('b. **Verify included delta specs')
-      );
-
-      expect(syncStep(withSync)).toContain(workflow);
-      expect(syncStep(withoutSync)).not.toContain(workflow);
-      expect(syncStep(withoutSync)).toContain('Perform the delta-to-main-spec merge inline yourself');
-      expect(syncStep(withoutSync)).toContain('`includedDeltas`');
-      expect(syncStep(withoutSync)).toContain('`excludedDeltas`');
-      expect(withoutSync).toContain('If sync is requested, perform the delta-to-main-spec merge inline');
+      expect(withSync).toContain(workflow);
+      expect(withSync).toContain('with only its included delta paths');
+      expect(withoutSync).not.toContain(workflow);
+      expect(withoutSync).toContain("`openspec archive` applies all of a change's delta specs or none");
+      for (const body of [withSync, withoutSync]) {
+        expect(body).toContain('openspec archive "<name>" --json --yes');
+        expect(body).not.toContain('merge inline');
+      }
     }
   });
 
-  it('keeps archive sync available with and without the sync workflow', () => {
+  // Archive hands the merge to `openspec archive`, so it neither needs the
+  // sync workflow nor asks the agent to merge by hand.
+  it('archives through the CLI whether or not sync is installed', () => {
     const variants = [
-      [
-        getSkillTemplates(['archive', 'sync']).find((entry) => entry.workflowId === 'archive')!.template.instructions,
-        getSkillTemplates(['archive'])[0].template.instructions,
-        'openspec-sync-specs',
-      ],
-      [
-        getCommandTemplates(['archive', 'sync']).find((entry) => entry.id === 'archive')!.template.content,
-        getCommandTemplates(['archive'])[0].template.content,
-        '/opsx:sync',
-      ],
-    ] as const;
+      getSkillTemplates(['archive', 'sync']).find((entry) => entry.workflowId === 'archive')!.template.instructions,
+      getSkillTemplates(['archive'])[0].template.instructions,
+      getCommandTemplates(['archive', 'sync']).find((entry) => entry.id === 'archive')!.template.content,
+      getCommandTemplates(['archive'])[0].template.content,
+    ];
 
-    for (const [withSync, withoutSync, workflow] of variants) {
-      const syncStep = (text: string) => text.slice(
-        text.indexOf('4. **Assess delta spec sync state**'),
-        text.indexOf('5. **Perform the archive**')
-      );
-
-      expect(syncStep(withSync)).toContain(workflow);
-      expect(withoutSync).not.toContain(workflow);
-      expect(syncStep(withoutSync)).toContain('perform the delta-to-main-spec merge inline yourself');
-      expect(withoutSync).toContain('If sync is requested, perform the delta-to-main-spec merge inline');
+    for (const body of variants) {
+      expect(body).toContain('openspec archive "<name>" --json');
+      expect(body).toContain('openspec archive "<name>" --json --yes');
+      expect(body).not.toContain('openspec-sync-specs');
+      expect(body).not.toContain('/opsx:sync');
+      expect(body).not.toContain('merge inline');
     }
   });
 });

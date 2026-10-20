@@ -514,6 +514,8 @@ describe('InitCommand', () => {
 
       await initCommand.execute(testDir);
 
+      // A skill teaches stores in its references/stores.md; a command carries
+      // the same text appended to its body.
       const generatedFiles = [
         ...[
           'openspec-propose',
@@ -522,13 +524,18 @@ describe('InitCommand', () => {
           'openspec-update-change',
           'openspec-sync-specs',
           'openspec-archive-change',
-        ].map((name) => path.join(testDir, '.claude', 'skills', name, 'SKILL.md')),
-        ...['propose', 'explore', 'apply', 'update', 'sync', 'archive'].map((name) =>
-          path.join(testDir, '.claude', 'commands', 'opsx', `${name}.md`)
-        ),
+        ].map((name) => [
+          path.join(testDir, '.claude', 'skills', name, 'SKILL.md'),
+          path.join(testDir, '.claude', 'skills', name, 'references', 'stores.md'),
+        ]),
+        ...['propose', 'explore', 'apply', 'update', 'sync', 'archive'].map((name) => [
+          path.join(testDir, '.claude', 'commands', 'opsx', `${name}.md`),
+        ]),
       ];
       const generatedContents = await Promise.all(
-        generatedFiles.map((file) => fs.readFile(file, 'utf-8'))
+        generatedFiles.map(async (files) =>
+          (await Promise.all(files.map((file) => fs.readFile(file, 'utf-8')))).join('\n')
+        )
       );
 
       for (const content of generatedContents) {
@@ -604,7 +611,7 @@ describe('InitCommand', () => {
       for (const file of syncFiles) {
         const content = await fs.readFile(file, 'utf-8');
         const mutationsComplete = content.indexOf(
-          'Follow the **Main Spec Format Reference** below'
+          'merge following `references/merge-rules.md`'
         );
         const validation = content.indexOf('openspec validate --specs');
         const summary = content.indexOf('6. **Show summary**');
@@ -1594,6 +1601,21 @@ describe('InitCommand', () => {
       expect(content).toContain('compatibility:');
       expect(content).toContain('metadata:');
       expect(content).toMatch(/---\n\n/); // End of frontmatter
+    });
+
+    it('writes each skill\'s references beside SKILL.md, with the tool\'s references', async () => {
+      const initCommand = new InitCommand({ tools: 'claude', force: true });
+      await initCommand.execute(testDir);
+
+      const skillDir = path.join(testDir, '.claude', 'skills', 'openspec-explore');
+      const references = (await fs.readdir(path.join(skillDir, 'references'))).sort();
+      expect(references).toEqual(['capture.md', 'examples.md', 'project-check.md', 'stores.md']);
+
+      // Claude has no /opsx: commands under skills delivery, so references are
+      // rewritten the same way SKILL.md is.
+      const capture = await fs.readFile(path.join(skillDir, 'references', 'capture.md'), 'utf-8');
+      expect(capture).toContain('Capturing artifacts never starts implementing them');
+      expect(capture).not.toContain('[[opsx:');
     });
 
     it('should include explore mode instructions', async () => {

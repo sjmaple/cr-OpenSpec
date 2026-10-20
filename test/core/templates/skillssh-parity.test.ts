@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import {
-  generateSkillContent,
+  generateSkillFiles,
   getSkillTemplates,
 } from '../../../src/core/shared/skill-generation.js';
 import { transformToSkillReferences } from '../../../src/utils/command-references.js';
@@ -14,25 +14,27 @@ import { SKILLS_DIR, stripVolatileFrontmatter } from '../../../scripts/skillssh-
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
-// The committed `skills/<name>/SKILL.md` tree is the skills.sh distribution
+// The committed `skills/<name>/` tree is the skills.sh distribution
 // (`npx skills add Fission-AI/OpenSpec`). It must match what the generator
 // would produce from the live templates; regenerate with `pnpm generate:skills`.
 describe('skills.sh distribution parity', () => {
   it('keeps committed skills/ in sync with the workflow templates', () => {
     for (const { template, dirName } of getSkillTemplates()) {
-      const expected = stripVolatileFrontmatter(
-        generateSkillContent(template, 'skills.sh', transformToSkillReferences)
-      );
-      const committedPath = join(repoRoot, SKILLS_DIR, dirName, 'SKILL.md');
-      const committed = readFileSync(committedPath, 'utf8');
-      expect(committed, `${dirName} is stale — run \`pnpm generate:skills\``).toBe(expected);
+      for (const file of generateSkillFiles(template, 'skills.sh', transformToSkillReferences)) {
+        const committedPath = join(repoRoot, SKILLS_DIR, dirName, file.relativePath);
+        const committed = readFileSync(committedPath, 'utf8');
+        expect(
+          committed,
+          `${dirName}/${file.relativePath} is stale — run \`pnpm generate:skills\``
+        ).toBe(stripVolatileFrontmatter(file.content));
+      }
     }
   });
 
   // Guard against extra, renamed, or symlinked entries that the per-template
   // loop above would never visit: the committed tree must be exactly what the
   // generator owns — README.md plus one real directory per template, each
-  // holding a single real SKILL.md.
+  // holding a real SKILL.md and exactly the reference files it generates.
   it('commits exactly the generated file set — no extra or symlinked entries', () => {
     const skillsRoot = join(repoRoot, SKILLS_DIR);
     const expectedDirs = getSkillTemplates()
@@ -55,15 +57,25 @@ describe('skills.sh distribution parity', () => {
     expect(dirs).toEqual(expectedDirs);
     expect(files).toEqual(['README.md']);
 
+    const generated = new Map(
+      getSkillTemplates().map(({ template, dirName }) => [
+        dirName,
+        generateSkillFiles(template, 'skills.sh', transformToSkillReferences).map(
+          (file) => file.relativePath
+        ),
+      ])
+    );
     for (const dir of dirs) {
-      const inner = readdirSync(join(skillsRoot, dir), { withFileTypes: true }).filter(
-        (e) => !(e.isFile() && e.name.startsWith('.'))
+      const listed: string[] = [];
+      for (const entry of readdirSync(join(skillsRoot, dir), { withFileTypes: true, recursive: true })) {
+        if (entry.isFile() && entry.name.startsWith('.')) continue;
+        const relative = join(entry.parentPath, entry.name).slice(join(skillsRoot, dir).length + 1);
+        expect(entry.isSymbolicLink(), `skills/${dir}/${relative} must not be a symlink`).toBe(false);
+        if (entry.isFile()) listed.push(relative.split('\\').join('/'));
+      }
+      expect(listed.sort(), `skills/${dir} must contain only its generated files`).toEqual(
+        [...generated.get(dir)!].sort()
       );
-      expect(
-        inner.map((e) => e.name),
-        `skills/${dir} must contain only SKILL.md`
-      ).toEqual(['SKILL.md']);
-      expect(inner[0]!.isFile(), `skills/${dir}/SKILL.md must be a regular file`).toBe(true);
     }
   });
 });
