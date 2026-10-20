@@ -1,0 +1,29 @@
+# Skill eval
+
+Runs real agent sessions against the skills an OpenSpec checkout generates, and grades the result with the OpenSpec CLI and the file system, never with the agent's own report.
+
+Each scenario copies `fixture/` (a small todo library with one spec) into a temp directory, runs `openspec init --tools claude`, applies the scenario's setup, and sends one request to headless Claude Code. The agent runs with permissions bypassed inside that throwaway directory, with web access off.
+
+| Scenario | Request | Passes when |
+|---|---|---|
+| `propose` | propose due dates | one change, every artifact written, `validate --strict` passes, no code touched |
+| `propose-then-stop` | propose, "then implement it" | change validates, still no code touched |
+| `apply` | apply `add-priority` | all tasks checked, `node --test` passes |
+| `verify` | verify a change whose tasks lie | reports the missing check, writes nothing |
+| `sync` | sync `add-clear-completed` | main spec gains the requirement, specs validate, change stays active |
+| `archive` | archive a finished change | archived, main spec updated, everything validates |
+| `archive-unfinished` | archive a change with open tasks | not archived, warns about the tasks |
+| `explore` | a design question | answers, writes nothing |
+| `no-project` | propose in a repo without OpenSpec | creates no `openspec/`, writes nothing |
+
+## Run
+
+Build each checkout first (`pnpm build`), then:
+
+```bash
+node scripts/skill-eval/run.mjs --label before --cli ../openspec-main --reps 5
+node scripts/skill-eval/run.mjs --label after --cli . --reps 5
+node scripts/skill-eval/compare.mjs scripts/skill-eval/results before after
+```
+
+`--model` picks the agent model, `--only a,b` runs some scenarios, and `--grader` sets the checkout whose CLI grades results (default: this one). Each run writes `<scenario>-<rep>.json` (checks, tokens, cost, turns, time) and the full `stream.jsonl` transcript.
